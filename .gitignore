@@ -1,0 +1,17 @@
+# entorno
+.venv/
+__pycache__/
+*.py[cod]
+
+# audio descargado (se regenera con download_clips.py)
+clips/
+
+# logs de ejecución
+logs/
+
+# sistema
+.DS_Store
+*.swp
+
+# anotaciones originales (descargar del Sheet, ver README)
+data/
