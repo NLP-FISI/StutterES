@@ -4,67 +4,67 @@
 ==============================================================================
        clips      %  objetivo %
 split                          
-train   2947  70.00        70.0
-val      635  15.08        15.0
-test     628  14.92        15.0
+train   1685  40.02        40.0
+val     1266  30.07        30.0
+test    1259  29.90        30.0
 
 ==============================================================================
 2. SPEAKERS — clips por partición
 ==============================================================================
 split  train  val  test  TOTAL
 Show                          
-ATMA     630  136   134    900
-LPJM     638  137   135    910
-PVM      582  125   125    832
-RRYR     577  124   124    825
-SSF      520  113   110    743
+ATMA     360  270   270    900
+LPJM     365  273   272    910
+PVM      333  251   248    832
+RRYR     329  249   247    825
+SSF      298  223   222    743
 
 ==============================================================================
 2b. SPEAKERS — distribución dentro de cada partición (%)
 ==============================================================================
       train    val   test  TOTAL
 Show                            
-ATMA  21.38  21.42  21.34  21.38
-LPJM  21.65  21.57  21.50  21.62
-PVM   19.75  19.69  19.90  19.76
-RRYR  19.58  19.53  19.75  19.60
-SSF   17.65  17.80  17.52  17.65
+ATMA  21.36  21.33  21.45  21.38
+LPJM  21.66  21.56  21.60  21.62
+PVM   19.76  19.83  19.70  19.76
+RRYR  19.53  19.67  19.62  19.60
+SSF   17.69  17.61  17.63  17.65
 
 ==============================================================================
 3. DISFLUENCIAS (etiqueta primaria) — clips por partición
 ==============================================================================
 split             train  val  test  TOTAL
 label                                    
-Prolongation        302   65    64    431
-Block               300   65    63    428
-SoundRep            308   67    64    439
-WordRep              71   16    16    103
-Interjection         11    3     3     17
-NoStutteredWords   1955  419   418   2792
+Prolongation        172  130   129    431
+Block               171  129   128    428
+SoundRep            176  132   131    439
+WordRep              41   32    30    103
+Interjection          8    5     4     17
+NoStutteredWords   1117  838   837   2792
 
 ==============================================================================
 3b. DISFLUENCIAS — distribución dentro de cada partición (%)
 ==============================================================================
                   train    val   test  TOTAL
 label                                       
-Prolongation      10.25  10.24  10.19  10.24
-Block             10.18  10.24  10.03  10.17
-SoundRep          10.45  10.55  10.19  10.43
-WordRep            2.41   2.52   2.55   2.45
-Interjection       0.37   0.47   0.48   0.40
-NoStutteredWords  66.34  65.98  66.56  66.32
+Prolongation      10.21  10.27  10.25  10.24
+Block             10.15  10.19  10.17  10.17
+SoundRep          10.45  10.43  10.41  10.43
+WordRep            2.43   2.53   2.38   2.45
+Interjection       0.47   0.39   0.32   0.40
+NoStutteredWords  66.29  66.19  66.48  66.32
 
 ==============================================================================
 4. DISFLUENCIAS (multi-etiqueta: todas las anotaciones del clip)
 ==============================================================================
                   train  val  test  TOTAL
 clase                                    
-Prolongation        391   89    81    561
-Block               304   65    63    432
-SoundRep            353   78    74    505
-WordRep              74   17    16    107
-Interjection         11    3     3     17
-NoStutteredWords   1955  419   418   2792
+Prolongation        220  172   169    561
+Block               173  131   128    432
+SoundRep            200  153   152    505
+WordRep              43   34    30    107
+Interjection          8    5     4     17
+NoStutteredWords   1117  838   837   2792
 
 ==============================================================================
 5. CRUCE SPEAKER x DISFLUENCIA — general
@@ -83,40 +83,40 @@ TOTAL           431    428       439      103            17              2792   
 ==============================================================================
 label  Prolongation  Block  SoundRep  WordRep  Interjection  NoStutteredWords  TOTAL
 Show                                                                                
-ATMA             28     60        54       19             0               469    630
-LPJM             28     40        17       10             6               537    638
-PVM              34     93       117        3             2               333    582
-RRYR            126     62        62       13             2               312    577
-SSF              86     45        58       26             1               304    520
-TOTAL           302    300       308       71            11              1955   2947
+ATMA             16     34        31       11             0               268    360
+LPJM             16     23        10        6             3               307    365
+PVM              19     53        67        2             2               190    333
+RRYR             72     35        35        7             2               178    329
+SSF              49     26        33       15             1               174    298
+TOTAL           172    171       176       41             8              1117   1685
 
 ==============================================================================
 5.2 CRUCE SPEAKER x DISFLUENCIA — VAL
 ==============================================================================
 label  Prolongation  Block  SoundRep  WordRep  Interjection  NoStutteredWords  TOTAL
 Show                                                                                
-ATMA              6     13        12        4             0               101    136
-LPJM              6      9         4        2             1               115    137
-PVM               7     20        25        1             1                71    125
-RRYR             27     13        13        3             1                67    124
-SSF              19     10        13        6             0                65    113
-TOTAL            65     65        67       16             3               419    635
+ATMA             12     26        23        8             0               201    270
+LPJM             12     17         7        4             3               230    273
+PVM              15     40        50        2             1               143    251
+RRYR             54     27        27        6             1               134    249
+SSF              37     19        25       12             0               130    223
+TOTAL           130    129       132       32             5               838   1266
 
 ==============================================================================
 5.3 CRUCE SPEAKER x DISFLUENCIA — TEST
 ==============================================================================
 label  Prolongation  Block  SoundRep  WordRep  Interjection  NoStutteredWords  TOTAL
 Show                                                                                
-ATMA              6     13        11        4             0               100    134
-LPJM              6      8         3        2             1               115    135
-PVM               7     20        25        1             1                71    125
-RRYR             27     13        13        3             1                67    124
-SSF              18      9        12        6             0                65    110
-TOTAL            64     63        64       16             3               418    628
+ATMA             12     26        23        8             0               201    270
+LPJM             12     17         7        4             2               230    272
+PVM              14     40        50        1             1               142    248
+RRYR             54     26        26        6             1               134    247
+SSF              37     19        25       11             0               130    222
+TOTAL           129    128       131       30             4               837   1259
 
 ==============================================================================
 6. VERIFICACIÓN DE LA ESTRATIFICACIÓN
 ==============================================================================
-  speaker     : desviación máx. vs. distribución global = 0.15 pp
-  disfluencia : desviación máx. vs. distribución global = 0.34 pp
-  conjunto    : desviación máx. vs. distribución global = 0.11 pp
+  speaker     : desviación máx. vs. distribución global = 0.07 pp
+  disfluencia : desviación máx. vs. distribución global = 0.16 pp
+  conjunto    : desviación máx. vs. distribución global = 0.06 pp

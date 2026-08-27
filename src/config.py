@@ -20,7 +20,7 @@ DISFLUENCIES = [
     "NoStutteredWords",
 ]
 
-SPLIT_RATIOS = {"train": 0.70, "val": 0.15, "test": 0.15}
+SPLIT_RATIOS = {"train": 0.40, "val": 0.30, "test": 0.30}
 SEED = 42
 
 for d in (CLIPS_DIR, OUT_DIR, LOG_DIR):
