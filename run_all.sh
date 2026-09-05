@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$(dirname "$0")/src"
+cd "$(dirname "$0")/src/clips_3s"
 PY="../.venv/bin/python"
 
 $PY build_index.py

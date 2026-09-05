@@ -1,0 +1,51 @@
+NOTAS DEL METODO
+============================================================
+
+TEXTOS
+Los .txt vienen de imprimir una noticia web a PDF, con tres defectos:
+  - cabeceras y pies repetidos una vez por pagina
+  - un byte NUL donde el PDF perdio la ligadura fi/fl ("justi\x00ca"): se
+    elige entre fi y fl la opcion que da una palabra española real
+  - alguna pagina con la extraccion rota, que deja rachas de tokens sueltos
+
+El titular y la bajada no llevan punto final, asi que partir solo por
+puntuacion los pega con la primera frase del cuerpo. Se separan por otra
+senal: un bloque que no cierra y va seguido de mayuscula es un titulo, salvo
+que la frase anterior siga abierta (entonces es un corte de pagina).
+
+Resultado: 1348 oraciones en las 100 lecturas.
+
+EMPAREJAMIENTO
+Cada hablante leyo las 100 lecturas una vez, asi que es una biyeccion: se
+resuelve con el algoritmo hungaro sobre una matriz de similitud TF-IDF, no
+cogiendo el mejor candidato de cada fila. El orden cronologico no sirve (el
+primer audio de ATMA es la Lectura 5).
+
+Cuatro comprobaciones independientes coinciden: biyeccion 100/100 en los
+cinco hablantes; las 500 asignaciones son el mejor candidato con margen
+minimo 0,25; los 50 bloques de grabacion caen cada uno en su decena de
+lecturas; y el hablante dice el numero de lectura en voz alta.
+
+SEGMENTACION
+Se alinean las palabras de la lectura con las del ASR por operaciones de
+edicion. Las repeticiones y muletillas salen como inserciones del lado del
+ASR y no descuadran la referencia.
+
+Una oracion se acepta con recall >= 0,50 o con precision >= 0,60 y al menos
+tres anclas. El segundo criterio hace falta porque el recall se hunde cuando
+la referencia es un titular largo del que solo se leyo una parte.
+
+Las fronteras se deciden con TODAS las palabras de la oracion, no solo con
+las ancladas: si no, una palabra mal transcrita o dicha tras un bloqueo largo
+se queda fuera del clip.
+
+Sin tope de duracion. El habla disfluente es mas lenta y un tope de 30 s
+eliminaria justo las muestras mas disfluentes: los clips largos son 2,3 veces
+mas disfluentes que los cortos.
+
+Resultado: 6674 clips, el 99,0 % de los 6740 posibles. Los 66 que faltan son
+casos donde ese hablante se salto la frase o la grabacion se corto antes.
+Ninguna oracion se queda sin voz: todas tienen audio de al menos 4 hablantes.
+
+Verificacion: se re-transcribe cada clip aislado y se compara con su oracion.
+En una muestra de 100, el 98 % conserva todas sus palabras.

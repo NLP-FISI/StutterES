@@ -1,0 +1,51 @@
+EMPAREJAMIENTO AUDIO <-> LECTURA
+============================================================
+
+Coseno TF-IDF (char 3-5 + palabra 1-2) entre la transcripcion y cada
+lectura, resuelto con el algoritmo hungaro.
+
+- ATMA: hungaro = argmax en 100/100
+- LPJM: hungaro = argmax en 100/100
+- PVM: hungaro = argmax en 100/100
+- RRYR: hungaro = argmax en 100/100
+- SSF: hungaro = argmax en 100/100
+
+BIYECCION
+- ATMA: 100/100 lecturas distintas sobre 100 audios  OK
+- LPJM: 100/100 lecturas distintas sobre 100 audios  OK
+- PVM: 100/100 lecturas distintas sobre 100 audios  OK
+- RRYR: 100/100 lecturas distintas sobre 100 audios  OK
+- SSF: 100/100 lecturas distintas sobre 100 audios  OK
+
+CONFIANZA
+      score        margen       
+        min median    min median
+Show                            
+ATMA  0.746  0.946  0.263  0.765
+LPJM  0.760  0.964  0.276  0.778
+PVM   0.676  0.922  0.257  0.734
+RRYR  0.734  0.939  0.271  0.758
+SSF   0.724  0.923  0.250  0.725
+
+- asignaciones que no son el argmax: 0/500
+- margen < 0.05: 0
+- rank asignado maximo: 1
+
+VALIDACION EXTERNA: BLOQUES POR FECHA
+El xlsx agrupa las lecturas en 10 'Dias' de 10. Si la sesion N es el
+Dia N, cada bloque cronologico de 10 audios cae en una decena.
+
+- bloques que caen en una sola decena: 50/50
+
+PEORES 10 POR MARGEN
+Show                EpId    lectura  score  margen  rank_asignado
+ SSF 2020-05-30_06_49_26 Lectura 40 0.8683  0.2501              1
+ PVM 2020-05-30_07_07_20 Lectura 40 0.8818  0.2567              1
+ PVM 2020-06-04_08_23_21 Lectura 71 0.8054  0.2574              1
+ SSF 2020-06-05_03_17_08 Lectura 86 0.9406  0.2623              1
+ATMA 2020-05-30_10_14_44 Lectura 40 0.8835  0.2632              1
+ SSF 2020-06-04_11_26_18 Lectura 71 0.9370  0.2673              1
+RRYR 2020-06-04_09_05_00 Lectura 71 0.9343  0.2709              1
+LPJM 2020-06-04_06_19_20 Lectura 71 0.9671  0.2755              1
+RRYR 2020-05-30_10_11_55 Lectura 40 0.8997  0.2771              1
+ATMA 2020-06-04_06_17_13 Lectura 71 0.9387  0.2789              1
