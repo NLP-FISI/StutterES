@@ -206,11 +206,6 @@ class H(BaseHTTPRequestHandler):
     def _j(self, obj, code=200):
         # Un 204 no lleva cuerpo: mandarlo descuadra la conexion persistente y
         # la siguiente peticion se queda esperando una respuesta que ya paso.
-        if code == 204:
-            self.send_response(204)
-            self.send_header("Content-Length", "0")
-            self.end_headers()
-            return
         b = json.dumps(obj, ensure_ascii=False).encode()
         self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
