@@ -123,3 +123,8 @@ table.dis audio{height:32px;vertical-align:middle}
 .clip audio{width:100%;height:32px;margin-top:6px}
 canvas.wf{cursor:pointer}
 canvas.wf.mover{cursor:grab}
+
+/* vista de YouTube */
+#byt{text-decoration:none}
+table.dis input.n{min-width:140px}
+.ctrl input.nota{margin-top:0}

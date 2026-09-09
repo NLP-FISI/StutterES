@@ -4,12 +4,20 @@
 #   .venv/bin/python src/web/preparar_audio.py  # web_audio/ (~230 MB)
 #   docker build -f deploy/Dockerfile -t stutteres-anotador .
 #   docker run -p 8080:80 -v anotador:/data stutteres-anotador
-#
-# Solo biblioteca estandar: no hay nada que instalar.
 FROM python:3.12-slim
+
+# ffmpeg recorta los fragmentos; yt-dlp baja el audio de YouTube.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ffmpeg ca-certificates curl \
+ && curl -sL -o /usr/local/bin/yt-dlp \
+      https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux \
+ && chmod +x /usr/local/bin/yt-dlp \
+ && apt-get purge -y curl && apt-get autoremove -y \
+ && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY web/server.py   /app/web/server.py
+COPY web/youtube.py  /app/web/youtube.py
 COPY web/public      /app/web/public
 COPY web_audio       /app/web_audio
 

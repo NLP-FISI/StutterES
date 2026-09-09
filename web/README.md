@@ -6,9 +6,12 @@ Todo corre en un solo servidor. Para desplegarlo, ver `../deploy/README.md`.
 navegador ──▶ /            web (html, css, js, sin dependencias)
               /data/*.json oraciones y formas de onda   (8 MB)
               /audio/*     lecturas en opus             (227 MB)
-              /fragmento/* recortes de 3 s, con ffmpeg
+              /fragmento/* recortes con ffmpeg
               /rest/v1/*   API sobre SQLite
 ```
+
+Hace falta `ffmpeg` para los recortes y `yt-dlp` para bajar audio de YouTube;
+yt-dlp se busca primero en `bin/`, junto al repo.
 
 ## Audio comprimido
 
@@ -30,6 +33,7 @@ canvas propio.
 | archivo | que hace |
 |---|---|
 | `server.py` | web, API, SQLite, audio y recortes |
+| `youtube.py` | baja el audio de un video y le calcula la onda |
 | `public/` | la interfaz |
 | `public/data/` | lo que genera `src/web/build_web.py` |
 
@@ -58,3 +62,19 @@ Es el mismo proceso que corre en el servidor. La base queda en
 La duracion nunca se teclea: el usuario elige donde empieza y el servidor
 fuerza los 3 s. Si una oracion dura menos de 3 s, la marca es la oracion
 entera.
+
+## Audios de YouTube
+
+El boton *YouTube* de la cabecera abre una vista aparte del anotador: se pega
+un enlace, se le pone nombre y el servidor baja el audio en un hilo, lo pasa a
+opus mono y le calcula la onda. La descarga queda en el historial con su
+estado, y la web lo consulta cada pocos segundos hasta que termina.
+
+Sobre la onda del video los cortes son libres, sin tipos ni disfluencias:
+
+- **doble clic** corta los segundos que diga la casilla de duracion.
+- **arrastrar** elige el trozo a mano.
+- cada recorte se renombra, se ajusta por inicio y duracion, se escucha en su
+  reproductor y se descarga con el boton `↓`.
+
+Borrar un video se lleva su fichero y sus recortes.

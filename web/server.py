@@ -19,6 +19,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
+import youtube
+
 AQUI = Path(__file__).resolve().parent
 PUB = AQUI / "public"
 ROOT = AQUI.parent
@@ -26,7 +28,7 @@ EXT = os.environ.get("AUDIO_EXT", "opus")
 DB = Path(os.environ.get("DB_PATH", AQUI / "anotador.db"))
 AUDIO_DIR = Path(os.environ.get("AUDIO_DIR", ROOT / "web_audio"))
 CACHE = Path(os.environ.get("CACHE_DIR", ROOT / "cache_fragmentos"))
-FRAG_MAX = 30.0     # tope de segundos por recorte
+FRAG_MAX = 300.0    # tope de segundos por recorte
 CACHE_MAX = 20000   # recortes en cache antes de tirar los mas viejos
 PUERTO = int(os.environ.get("PUERTO", 8765))
 HOST = os.environ.get("HOST", "127.0.0.1")
@@ -41,6 +43,20 @@ CREATE TABLE IF NOT EXISTS disfluencia (id INTEGER PRIMARY KEY AUTOINCREMENT,
   origen TEXT DEFAULT 'manual', nota TEXT DEFAULT '', clip3s INT,
   autor TEXT DEFAULT '', creado TEXT);
 CREATE INDEX IF NOT EXISTS ix_disf ON disfluencia (speaker, lectura, sent_idx);
+CREATE TABLE IF NOT EXISTS youtube (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  nombre TEXT NOT NULL, url TEXT NOT NULL, video_id TEXT DEFAULT '',
+  titulo TEXT DEFAULT '', dur_s REAL DEFAULT 0, fichero TEXT DEFAULT '',
+  picos TEXT DEFAULT '', estado TEXT DEFAULT 'descargando',
+  error TEXT DEFAULT '', autor TEXT DEFAULT '', creado TEXT);
+
+CREATE TABLE IF NOT EXISTS recorte (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  youtube_id INTEGER NOT NULL, nombre TEXT DEFAULT '',
+  start_s REAL NOT NULL, stop_s REAL NOT NULL,
+  autor TEXT DEFAULT '', creado TEXT);
+CREATE INDEX IF NOT EXISTS ix_recorte ON recorte (youtube_id);
+
 CREATE TABLE IF NOT EXISTS estado (speaker TEXT, lectura INT, sent_idx INT,
   estado TEXT DEFAULT 'pendiente', nota TEXT DEFAULT '', autor TEXT DEFAULT '',
   actualizado TEXT, PRIMARY KEY (speaker, lectura, sent_idx));
@@ -109,7 +125,9 @@ def encajar(f):
 COLS = {"disfluencia": ["speaker", "lectura", "sent_idx", "tipo", "start_s",
                         "stop_s", "origen", "nota", "clip3s", "autor", "creado"],
         "estado": ["speaker", "lectura", "sent_idx", "estado", "nota", "autor",
-                   "actualizado"]}
+                   "actualizado"],
+        "youtube": ["nombre"],
+        "recorte": ["nombre", "start_s", "stop_s"]}
 EQ = re.compile(r"^eq\.(.*)$")
 
 
@@ -153,6 +171,30 @@ def recortar(sp, epid, a, dur):
         return None
     tmp.replace(dst)
     return dst
+
+
+YT_DIR = AUDIO_DIR / "youtube"
+
+
+def bajar_video(fila_id, url):
+    """Hilo de descarga: deja la fila en 'listo' o en 'error'."""
+    try:
+        datos = youtube.info(url, ROOT)
+        destino = YT_DIR / f"{fila_id}_{datos['video_id'] or 'audio'}.{EXT}"
+        cx().execute("UPDATE youtube SET video_id=?, titulo=?, dur_s=? WHERE id=?",
+                     (datos["video_id"], datos["titulo"], datos["dur_s"], fila_id))
+        cx().commit()
+        youtube.descargar(url, destino, ROOT)
+        dur = youtube.duracion(destino)
+        picos, _ = youtube.envolvente(destino, dur)
+        cx().execute("UPDATE youtube SET fichero=?, dur_s=?, picos=?, estado='listo',"
+                     " error='' WHERE id=?",
+                     (destino.name, dur, picos, fila_id))
+        cx().commit()
+    except Exception as e:  # noqa: BLE001
+        cx().execute("UPDATE youtube SET estado='error', error=? WHERE id=?",
+                     (str(e)[:400], fila_id))
+        cx().commit()
 
 
 class H(BaseHTTPRequestHandler):
@@ -244,6 +286,10 @@ class H(BaseHTTPRequestHandler):
         b_ = f.read_bytes()
         self.send_response(200)
         self.send_header("Content-Type", "audio/ogg" if EXT == "opus" else "audio/mpeg")
+        if (nombre := q.get("descargar", [""])[0]):
+            limpio = re.sub(r"[^A-Za-z0-9 _.-]", "_", nombre)[:80] or "recorte"
+            self.send_header("Content-Disposition",
+                             f'attachment; filename="{limpio}.{EXT}"')
         self.send_header("Content-Length", str(len(b_)))
         self.send_header("Accept-Ranges", "none")
         self.send_header("Cache-Control", "public, max-age=31536000")
@@ -269,6 +315,18 @@ class H(BaseHTTPRequestHandler):
             return self._audio(p[len("/audio/"):])
         if p.startswith("/fragmento/"):
             return self._fragmento(p[len("/fragmento/"):], q)
+        if p == "/api/youtube":
+            return self._j([dict(r) for r in cx().execute(
+                "SELECT id,nombre,url,video_id,titulo,dur_s,fichero,estado,error,"
+                "autor,creado FROM youtube ORDER BY id DESC")])
+        if p.startswith("/api/youtube/"):
+            r = cx().execute("SELECT * FROM youtube WHERE id=?",
+                             (int(p.split("/")[3]),)).fetchone()
+            return self._j(dict(r)) if r else self._j({"error": "no existe"}, 404)
+        if p == "/api/recorte":
+            w, v = filtros(q)
+            return self._j([dict(r) for r in cx().execute(
+                f"SELECT * FROM recorte{w} ORDER BY start_s", v)])
         if p.startswith("/rest/v1/"):
             t = p.split("/")[3]
             if t == "progreso":
@@ -311,6 +369,30 @@ class H(BaseHTTPRequestHandler):
             cx().commit()
             fila = cx().execute("SELECT * FROM disfluencia WHERE id=?", (cur.lastrowid,)).fetchone()
             return self._j([dict(fila)] if "representation" in pref else [], 201)
+        if t == "youtube":
+            url = (f.get("url") or "").strip()
+            nombre = (f.get("nombre") or "").strip() or "sin nombre"
+            if not youtube.URL_VALIDA.match(url):
+                return self._j({"error": "no parece un enlace de YouTube"}, 400)
+            cur = cx().execute(
+                "INSERT INTO youtube (nombre,url,autor,creado) VALUES (?,?,?,?)",
+                (nombre, url, f.get("autor", ""), time.strftime("%Y-%m-%dT%H:%M:%SZ")))
+            cx().commit()
+            fid = cur.lastrowid
+            threading.Thread(target=bajar_video, args=(fid, url), daemon=True).start()
+            fila = cx().execute("SELECT * FROM youtube WHERE id=?", (fid,)).fetchone()
+            return self._j([dict(fila)], 201)
+        if t == "recorte":
+            cur = cx().execute(
+                "INSERT INTO recorte (youtube_id,nombre,start_s,stop_s,autor,creado)"
+                " VALUES (?,?,?,?,?,?)",
+                (int(f["youtube_id"]), f.get("nombre", ""), float(f["start_s"]),
+                 float(f["stop_s"]), f.get("autor", ""),
+                 time.strftime("%Y-%m-%dT%H:%M:%SZ")))
+            cx().commit()
+            fila = cx().execute("SELECT * FROM recorte WHERE id=?",
+                                (cur.lastrowid,)).fetchone()
+            return self._j([dict(fila)], 201)
         if t == "estado":
             cols = [c for c in COLS[t] if c in f]
             cx().execute(
@@ -364,6 +446,11 @@ class H(BaseHTTPRequestHandler):
         u = urlparse(self.path)
         t, q = u.path.split("/")[3], parse_qs(u.query)
         w, v = filtros(q)
+        if t == "youtube":
+            for r in cx().execute(f"SELECT id, fichero FROM youtube{w}", v):
+                if r["fichero"]:
+                    (YT_DIR / r["fichero"]).unlink(missing_ok=True)
+                cx().execute("DELETE FROM recorte WHERE youtube_id=?", (r["id"],))
         cx().execute(f"DELETE FROM {t}{w}", v)
         cx().commit()
         return self._j([], 204)

@@ -13,6 +13,7 @@ Corriendo en `/data/msobrevilla/stutterES`. Nada fuera de esta carpeta se toca.
 | proceso | que hace |
 |---|---|
 | `web/server.py` | web, API, SQLite y audio. Python 3, solo biblioteca estandar |
+| `bin/yt-dlp` | lo usa la vista de YouTube para bajar audio |
 | `bin/cloudflared` | el tunel que da la URL publica |
 | `run.sh vigila` | cada 20 s revisa los dos y relevanta el que se haya caido |
 

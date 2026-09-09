@@ -65,6 +65,7 @@ function alterna (o) {
   tocar(o, o.a, o.b)
 }
 ;(function pinta () {
+  if (YT_SONANDO && ONDA_YT) ONDA_YT.dibuja()
   if (ACTIVA && ONDAS.has(ACTIVA.i)) {
     ONDAS.get(ACTIVA.i).dibuja()
     if (ACTIVA.card?.tm) ACTIVA.card.tm.textContent = seg(AU.currentTime - ACTIVA.a)
@@ -225,11 +226,12 @@ function urlFragmento (a, b) {
   return `/fragmento/${ACTUAL.sp}/${ACTUAL.epid}?a=${a.toFixed(3)}&b=${b.toFixed(3)}`
 }
 
-function reproductor (a, b, ancho) {
+function reproductor (a, b, ancho, sp, epid) {
   const au = el('audio')
   au.controls = true
   au.preload = 'none'                  // no se recorta hasta darle al play
-  au.src = urlFragmento(a, b)
+  au.src = sp ? `/fragmento/${sp}/${epid}?a=${a.toFixed(3)}&b=${b.toFixed(3)}`
+    : urlFragmento(a, b)
   if (ancho) au.style.width = ancho
   au.addEventListener('play', () => AU.pause())
   return au
@@ -550,11 +552,299 @@ addEventListener('keydown', ev => {
   }
 })
 
+// ---------------------------------------------------------------- youtube
+const seg1 = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
+
+class OndaYT {
+  constructor (v, recortes, dibujaTabla) {
+    this.v = v
+    this.rec = recortes
+    this.avisa = dibujaTabla
+    this.sel = null
+    this.picos = Uint8Array.from(atob(v.picos || ''), c => c.charCodeAt(0))
+    this.cv = el('canvas', 'wf')
+    this.cv.addEventListener('mousedown', e => this.baja(e))
+    this.cv.addEventListener('mousemove', e => this.mueve(e))
+    this.cv.addEventListener('dblclick', e => this.dobleClic(e))
+    new ResizeObserver(() => this.dibuja()).observe(this.cv)
+  }
+
+  tiempo (e) {
+    const r = this.cv.getBoundingClientRect()
+    return Math.max(0, Math.min(this.v.dur_s, (e.clientX - r.left) / r.width * this.v.dur_s))
+  }
+  encima (t) {
+    for (let i = this.rec.length - 1; i >= 0; i--) {
+      const d = this.rec[i]
+      if (t >= d.start_s && t <= d.stop_s) return d
+    }
+    return null
+  }
+  baja (e) {
+    const t = this.tiempo(e)
+    this.arr = { x0: e.clientX, t0: t, d: this.encima(t), movido: false }
+    ARRASTRANDO = this
+  }
+  mueve (e) {
+    if (!this.arr) {
+      this.cv.classList.toggle('mover', !!this.encima(this.tiempo(e)))
+      return
+    }
+    if (Math.abs(e.clientX - this.arr.x0) < 4) return
+    this.arr.movido = true
+    this.arr.t1 = this.tiempo(e)
+    this.dibuja()
+  }
+  sube (e) {
+    const a = this.arr; if (!a) return
+    this.arr = null
+    if (a.movido) {
+      const ini = Math.min(a.t0, a.t1), fin = Math.max(a.t0, a.t1)
+      if (fin - ini > 0.15) crearRecorte(this.v, ini, fin)
+      else this.dibuja()
+      return
+    }
+    if (a.d) { this.sel = a.d.id; this.avisa(); tocarYT(this.v, a.d.start_s, a.d.stop_s); return }
+    tocarYT(this.v, a.t0, this.v.dur_s)
+  }
+  dobleClic (e) {
+    const t = this.tiempo(e)
+    if (this.encima(t)) return
+    const x = Math.max(0.2, parseFloat($('#dur').value) || 3)
+    crearRecorte(this.v, Math.max(0, Math.min(t, this.v.dur_s - x)), null, x)
+  }
+
+  dibuja () {
+    const cv = this.cv, r = cv.getBoundingClientRect()
+    if (!r.width) return
+    const dpr = devicePixelRatio || 1
+    const W = Math.round(r.width * dpr), H = Math.round(r.height * dpr)
+    if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H }
+    const g = cv.getContext('2d')
+    g.fillStyle = '#1e222b'; g.fillRect(0, 0, W, H)
+    const med = H / 2, n = this.picos.length
+    g.fillStyle = '#3c4454'
+    for (let x = 0; x < W; x++) {
+      const v = n ? this.picos[Math.min(n - 1, Math.floor(x / W * n))] / 255 : 0
+      const h = Math.max(1, v * (med - 2 * dpr))
+      g.fillRect(x, med - h, 1, h * 2)
+    }
+    for (const d of this.rec) {
+      const x0 = d.start_s / this.v.dur_s * W, x1 = d.stop_s / this.v.dur_s * W
+      g.fillStyle = '#4c8dff3d'; g.fillRect(x0, 0, x1 - x0, H)
+      g.fillStyle = '#4c8dff'
+      g.fillRect(x0, 0, 2 * dpr, H); g.fillRect(x1 - 2 * dpr, 0, 2 * dpr, H)
+      if (d.id === this.sel) {
+        g.strokeStyle = '#fff'; g.lineWidth = 1.5 * dpr
+        g.strokeRect(x0 + 1, 1, x1 - x0 - 2, H - 2)
+      }
+    }
+    if (this.arr && this.arr.movido && this.arr.t1 != null) {
+      const a = Math.min(this.arr.t0, this.arr.t1) / this.v.dur_s * W
+      const b = Math.max(this.arr.t0, this.arr.t1) / this.v.dur_s * W
+      g.fillStyle = '#ffffff33'; g.fillRect(a, 0, b - a, H)
+    }
+    if (YT_SONANDO === this.v.id) {
+      const t = AU.currentTime
+      if (t >= 0 && t <= this.v.dur_s) {
+        g.fillStyle = '#e6e8ec'; g.fillRect(t / this.v.dur_s * W, 0, dpr, H)
+      }
+    }
+  }
+}
+
+let YT_SONANDO = null, ONDA_YT = null
+
+function urlYT (v) { return `/audio/youtube/${v.fichero}` }
+
+function tocarYT (v, desde, hasta) {
+  const u = urlYT(v)
+  if (AU.src !== new URL(u, location.href).href) AU.src = u
+  ACTIVA = null; YT_SONANDO = v.id
+  situar(desde); HASTA = hasta
+  AU.play().catch(() => {})
+}
+
+async function crearRecorte (v, ini, fin, largo) {
+  const a = Math.max(0, ini)
+  const b = fin != null ? Math.min(v.dur_s, fin) : Math.min(v.dur_s, a + largo)
+  const [g] = await api('recorte', {
+    method: 'POST',
+    body: { youtube_id: v.id, nombre: '', start_s: +a.toFixed(3), stop_s: +b.toFixed(3), autor: AUTOR },
+    prefer: 'return=representation'
+  })
+  RECORTES.push(g)
+  ONDA_YT.sel = g.id
+  pintarRecortes(v)
+}
+
+let RECORTES = []
+
+function pintarRecortes (v) {
+  const tb = $('#trec'); if (!tb) return
+  tb.innerHTML = ''
+  $('#sinrec').hidden = RECORTES.length > 0
+  for (const d of [...RECORTES].sort((x, y) => x.start_s - y.start_s)) {
+    const tr = el('tr'); if (d.id === ONDA_YT.sel) tr.className = 'sel'
+    const nom = el('input', 'n')
+    nom.value = d.nombre || ''
+    nom.placeholder = `recorte ${d.id}`
+    let tn
+    nom.oninput = () => {
+      clearTimeout(tn)
+      tn = setTimeout(() => { d.nombre = nom.value; api(`recorte?id=eq.${d.id}`, { method: 'PATCH', body: { nombre: d.nombre } }) }, 600)
+    }
+    const ini = el('input', 't'); ini.value = d.start_s.toFixed(2)
+    const dur = el('input', 't'); dur.value = (d.stop_s - d.start_s).toFixed(2)
+    const recalcula = () => {
+      const a = Math.max(0, Math.min(parseFloat(ini.value) || 0, v.dur_s - 0.2))
+      const x = Math.max(0.2, parseFloat(dur.value) || 1)
+      d.start_s = +a.toFixed(3); d.stop_s = +Math.min(v.dur_s, a + x).toFixed(3)
+      api(`recorte?id=eq.${d.id}`, { method: 'PATCH', body: { start_s: d.start_s, stop_s: d.stop_s } })
+      pintarRecortes(v); ONDA_YT.dibuja()
+    }
+    ini.onchange = dur.onchange = recalcula
+    const pl = reproductor(d.start_s, d.stop_s, '210px', 'youtube', v.fichero.replace(/\.[^.]+$/, ''))
+    const baja = el('a', 'btn', '↓')
+    baja.title = 'descargar el recorte'
+    baja.href = `/fragmento/youtube/${v.fichero.replace(/\.[^.]+$/, '')}?a=${d.start_s.toFixed(3)}&b=${d.stop_s.toFixed(3)}&descargar=${encodeURIComponent(d.nombre || (v.nombre + '_' + d.id))}`
+    const x = el('span', 'x', '✕')
+    x.onclick = async ev => {
+      ev.stopPropagation()
+      await api(`recorte?id=eq.${d.id}`, { method: 'DELETE' })
+      RECORTES.splice(RECORTES.indexOf(d), 1)
+      pintarRecortes(v); ONDA_YT.dibuja()
+    }
+    for (const nodo of [nom, ini, dur, pl, baja, x]) {
+      const td = el('td'); td.append(nodo); tr.append(td)
+    }
+    tr.onclick = ev => { if (ev.target !== x) { ONDA_YT.sel = d.id; pintarRecortes(v); ONDA_YT.dibuja() } }
+    tb.append(tr)
+  }
+}
+
+async function vistaYoutube (id) {
+  miga([{ t: 'Hablantes', href: '#/' }, { t: 'YouTube', href: '#/yt' }])
+  const v = $('#vista'); v.innerHTML = ''
+  v.append(el('h1', null, 'Audios de YouTube'),
+    el('div', 'sub', 'pega un enlace, ponle nombre y córtale los trozos que necesites'))
+
+  const caja = el('div', 'ora')
+  const f = el('div', 'ctrl')
+  const url = el('input', 'nota'); url.placeholder = 'https://www.youtube.com/watch?v=…'
+  url.style.cssText = 'flex:2;margin:0;min-width:260px'
+  const nom = el('input', 'nota'); nom.placeholder = 'nombre para este audio'
+  nom.style.cssText = 'flex:1;margin:0;min-width:160px'
+  const b = el('button', 'btn act', 'Descargar')
+  b.onclick = async () => {
+    if (!url.value.trim()) return
+    b.disabled = true; b.textContent = 'descargando…'
+    try {
+      await api('youtube', { method: 'POST', body: { url: url.value.trim(), nombre: nom.value.trim(), autor: AUTOR }, prefer: 'return=representation' })
+      url.value = ''; nom.value = ''
+      lista()
+    } finally { b.disabled = false; b.textContent = 'Descargar' }
+  }
+  f.append(url, nom, b)
+  caja.append(f)
+  v.append(caja)
+
+  const hist = el('div'); v.append(hist)
+  const detalle = el('div'); v.append(detalle)
+
+  let temporizador = null
+  async function lista () {
+    const filas = await api('youtube')
+    hist.innerHTML = ''
+    const h = el('div', 'sec'); h.append(el('h4', null, `Historial (${filas.length})`))
+    if (!filas.length) h.append(el('div', 'vacio', 'Todavía no has descargado nada.'))
+    const g = el('div', 'rejilla sp')
+    for (const r of filas) {
+      const a = el('div', 'tarjeta')
+      a.append(el('div', 'tit', r.nombre))
+      a.append(el('div', 'met', r.titulo || r.url))
+      const est = el('div', 'met')
+      est.textContent = r.estado === 'listo'
+        ? `${seg1(r.dur_s)} · listo`
+        : r.estado === 'error' ? `error: ${r.error}` : 'descargando…'
+      if (r.estado === 'error') est.style.color = 'var(--Block)'
+      a.append(est)
+      const bs = el('div', 'chips'); bs.style.marginTop = '8px'
+      if (r.estado === 'listo') {
+        const ab = el('button', 'btn', 'Abrir')
+        ab.onclick = () => abre(r)
+        bs.append(ab)
+      }
+      const bo = el('button', 'btn', 'Borrar')
+      bo.onclick = async ev => {
+        ev.stopPropagation()
+        if (!confirm(`¿Borrar "${r.nombre}" y sus recortes?`)) return
+        await api(`youtube?id=eq.${r.id}`, { method: 'DELETE' })
+        if (ABIERTO && ABIERTO.id === r.id) { ABIERTO = null; detalle.innerHTML = '' }
+        lista()
+      }
+      bs.append(bo); a.append(bs)
+      g.append(a)
+    }
+    h.append(g); hist.append(h)
+    const pendientes = filas.some(r => r.estado === 'descargando')
+    clearTimeout(temporizador)
+    if (pendientes) temporizador = setTimeout(lista, 4000)
+    if (id && !ABIERTO) {
+      const r = filas.find(x => x.id === +id)
+      if (r && r.estado === 'listo') abre(r)
+    }
+  }
+
+  let ABIERTO = null
+  async function abre (r) {
+    const full = await api(`youtube/${r.id}`)
+    ABIERTO = full
+    RECORTES = await api(`recorte?youtube_id=eq.${r.id}`)
+    detalle.innerHTML = ''
+    const c = el('div', 'ora')
+    c.append(el('div', 'ofila')).firstChild.append(
+      el('div', 'num', seg1(full.dur_s)),
+      Object.assign(el('div', 'texto'), { textContent: full.nombre }))
+    if (full.titulo) c.querySelector('.texto').append(el('div', 'asr', full.titulo))
+
+    ONDA_YT = new OndaYT(full, RECORTES, () => pintarRecortes(full))
+    const onda = el('div', 'onda'); onda.append(ONDA_YT.cv); c.append(onda)
+
+    const ctrl = el('div', 'ctrl')
+    const play = el('button', 'btn', '▶ Reproducir')
+    play.onclick = () => {
+      if (!AU.paused && YT_SONANDO === full.id) AU.pause()
+      else tocarYT(full, AU.currentTime && YT_SONANDO === full.id ? AU.currentTime : 0, full.dur_s)
+    }
+    const dur = el('input', 't'); dur.id = 'dur'; dur.value = '3'
+    ctrl.append(play, el('span', 'tiempo', '· doble clic corta'), dur,
+      el('span', 'tiempo', 's · o arrastra para elegir el trozo'))
+    c.append(ctrl)
+
+    const s2 = el('div', 'sec')
+    s2.append(el('h4', null, 'Recortes'))
+    const tb = el('table', 'dis')
+    tb.innerHTML = '<thead><tr><th>nombre</th><th>inicio</th><th>duración</th><th></th><th></th><th></th></tr></thead><tbody id="trec"></tbody>'
+    s2.append(tb)
+    const vac = el('div', 'vacio', 'Sin recortes. Doble clic en la onda, o arrastra para elegir el trozo.')
+    vac.id = 'sinrec'; s2.append(vac)
+    c.append(s2)
+    detalle.append(c)
+    requestAnimationFrame(() => ONDA_YT.dibuja())
+    pintarRecortes(full)
+    location.hash = `#/yt/${full.id}`
+  }
+
+  lista()
+}
+
 // ------------------------------------------------------------------ router
 async function ruta () {
   const p = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean)
   try {
-    if (!p.length) await vistaSpeakers()
+    if (p[0] === 'yt') await vistaYoutube(p[1])
+    else if (!p.length) await vistaSpeakers()
     else if (p.length === 1) await vistaLecturas(p[0])
     else await vistaLectura(p[0], +p[1])
   } catch (e) {

@@ -1,7 +1,8 @@
 # Desplegar el anotador en un solo servidor
 
 Web, API, base de datos y audio en un contenedor, sin dependencias de Python:
-todo es biblioteca estandar.
+todo es biblioteca estandar. La imagen trae `ffmpeg` para los recortes y
+`yt-dlp` para bajar audio de YouTube.
 
 ## 1. Preparar los datos (en tu PC, una vez)
 

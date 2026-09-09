@@ -91,10 +91,14 @@ original y un `index.csv` del mismo formato que el del dataset de clips.
 | archivo | qué hace |
 |---|---|
 | `web/server.py` | web, API, SQLite, audio y recortes |
+| `web/youtube.py` | baja el audio de un vídeo de YouTube y lo recorta |
 | `src/web/build_web.py` | formas de onda y lista de oraciones |
 | `src/web/preparar_audio.py` | comprime los 500 WAV a Opus |
 | `src/web/exportar.py` | recoge las anotaciones y corta los WAV de 3 s |
 | `deploy/` | Dockerfile, arranque y guía de despliegue |
+
+La web trae además una vista de YouTube: se pega un enlace, se descarga el
+audio con nombre y se le sacan recortes libres, sin tipos ni disfluencias.
 
 Guía de despliegue en `deploy/README.md`; el porqué de cada decisión, en
 `web/README.md`.
