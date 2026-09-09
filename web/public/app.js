@@ -19,6 +19,7 @@ const NOMBRE = {
 }
 
 let CFG = null, META = null, ACTUAL = null, TIPO = 'Block', FOCO = 0
+let YT_SONANDO = null, ONDA_YT = null, RECORTES = []
 let AUTOR = localStorage.getItem('autor') || ''
 const ONDAS = new Map()
 let ARRASTRANDO = null
@@ -84,18 +85,56 @@ const marca = (() => {
 })()
 const aviso = m => marca(m)
 
-async function api (ruta, { method = 'GET', body, prefer } = {}) {
+// Cola de escrituras pendientes. Si el servidor no responde, lo anotado no se
+// pierde: se guarda en el navegador y se reintenta hasta que entra.
+const COLA = leerCola()
+function leerCola () {
+  try { return JSON.parse(localStorage.getItem('cola') || '[]') } catch { return [] }
+}
+function apuntarCola () {
+  try { localStorage.setItem('cola', JSON.stringify(COLA)) } catch {}
+  const n = $('#pendientes')
+  if (n) { n.textContent = COLA.length ? `${COLA.length} sin guardar` : ''; n.hidden = !COLA.length }
+}
+
+async function pedir (ruta, method, body, prefer) {
   const h = {}
   if (body) h['Content-Type'] = 'application/json'
   if (prefer) h.Prefer = prefer
-  if (method !== 'GET') marca('g')
   const r = await fetch(`/rest/v1/${ruta}`, {
     method, headers: h, body: body ? JSON.stringify(body) : undefined
   })
-  if (!r.ok) { const t = await r.text(); marca('error: ' + t.slice(0, 90)); throw new Error(t) }
-  if (method !== 'GET') marca('ok')
+  if (!r.ok) throw Object.assign(new Error(await r.text()), { rechazado: r.status < 500 })
   return r.status === 204 ? null : r.json()
 }
+
+async function api (ruta, { method = 'GET', body, prefer } = {}) {
+  if (method === 'GET') return pedir(ruta, method, body, prefer)
+  marca('g')
+  try {
+    const d = await pedir(ruta, method, body, prefer)
+    marca('ok')
+    return d
+  } catch (e) {
+    if (e.rechazado) { marca('error: ' + e.message.slice(0, 90)); throw e }
+    COLA.push({ ruta, method, body, prefer })   // el servidor no está: se reintenta
+    apuntarCola()
+    marca('sin conexión · guardado para reintentar')
+    throw e
+  }
+}
+
+async function vaciarCola () {
+  while (COLA.length) {
+    const op = COLA[0]
+    try { await pedir(op.ruta, op.method, op.body, op.prefer) } catch (e) {
+      if (!e.rechazado) return                  // sigue sin haber servidor
+    }
+    COLA.shift(); apuntarCola()
+  }
+}
+setInterval(vaciarCola, 15000)
+addEventListener('online', vaciarCola)
 
 // ----------------------------------------------------------------- onda
 class Onda {
@@ -653,8 +692,6 @@ class OndaYT {
   }
 }
 
-let YT_SONANDO = null, ONDA_YT = null
-
 function urlYT (v) { return `/audio/youtube/${v.fichero}` }
 
 function tocarYT (v, desde, hasta) {
@@ -677,8 +714,6 @@ async function crearRecorte (v, ini, fin, largo) {
   ONDA_YT.sel = g.id
   pintarRecortes(v)
 }
-
-let RECORTES = []
 
 function pintarRecortes (v) {
   const tb = $('#trec'); if (!tb) return
@@ -874,6 +909,8 @@ function pedirAutor (forzar) {
     return
   }
   pedirAutor(false)
+  apuntarCola()
+  vaciarCola()
   addEventListener('hashchange', ruta)
   ruta()
 })()

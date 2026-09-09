@@ -29,3 +29,5 @@ outputs_web/
 clips_web/
 web_audio/
 bin/
+deploy/pruebas/node_modules/
+deploy/pruebas/package*.json

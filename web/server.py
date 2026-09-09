@@ -28,6 +28,7 @@ EXT = os.environ.get("AUDIO_EXT", "opus")
 DB = Path(os.environ.get("DB_PATH", AQUI / "anotador.db"))
 AUDIO_DIR = Path(os.environ.get("AUDIO_DIR", ROOT / "web_audio"))
 CACHE = Path(os.environ.get("CACHE_DIR", ROOT / "cache_fragmentos"))
+RECORTES = Path(os.environ.get("RECORTES_DIR", ROOT / "recortes"))
 FRAG_MAX = 300.0    # tope de segundos por recorte
 CACHE_MAX = 20000   # recortes en cache antes de tirar los mas viejos
 PUERTO = int(os.environ.get("PUERTO", 8765))
@@ -53,7 +54,7 @@ CREATE TABLE IF NOT EXISTS youtube (
 CREATE TABLE IF NOT EXISTS recorte (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   youtube_id INTEGER NOT NULL, nombre TEXT DEFAULT '',
-  start_s REAL NOT NULL, stop_s REAL NOT NULL,
+  start_s REAL NOT NULL, stop_s REAL NOT NULL, fichero TEXT DEFAULT '',
   autor TEXT DEFAULT '', creado TEXT);
 CREATE INDEX IF NOT EXISTS ix_recorte ON recorte (youtube_id);
 
@@ -81,6 +82,21 @@ def cx():
 
 
 cx().executescript(ESQUEMA)
+
+
+def migrar():
+    """CREATE TABLE IF NOT EXISTS no toca las tablas que ya existen."""
+    faltan = {"recorte": [("fichero", "TEXT DEFAULT ''")]}
+    for tabla, columnas in faltan.items():
+        tiene = {r[1] for r in cx().execute(f"PRAGMA table_info({tabla})")}
+        for nombre, tipo in columnas:
+            if nombre not in tiene:
+                cx().execute(f"ALTER TABLE {tabla} ADD COLUMN {nombre} {tipo}")
+                print(f"anadida {tabla}.{nombre}")
+    cx().commit()
+
+
+migrar()
 
 
 def cargar():
@@ -195,6 +211,54 @@ def bajar_video(fila_id, url):
         cx().execute("UPDATE youtube SET estado='error', error=? WHERE id=?",
                      (str(e)[:400], fila_id))
         cx().commit()
+
+
+def nombre_limpio(s, por_defecto):
+    s = re.sub(r"[^\w .-]", "_", (s or "").strip(), flags=re.UNICODE)[:60]
+    return s or por_defecto
+
+
+def guardar_recorte(rid):
+    """Escribe el recorte como fichero propio, no como cache que se puede tirar."""
+    try:
+        r = cx().execute("SELECT * FROM recorte WHERE id=?", (rid,)).fetchone()
+        if not r:
+            return
+        v = cx().execute("SELECT nombre, fichero FROM youtube WHERE id=?",
+                         (r["youtube_id"],)).fetchone()
+        if not v or not v["fichero"]:
+            return
+        src = YT_DIR / v["fichero"]
+        carpeta = RECORTES / nombre_limpio(v["nombre"], f"audio_{r['youtube_id']}")
+        carpeta.mkdir(parents=True, exist_ok=True)
+        dst = carpeta / f"{r['id']:04d}_{nombre_limpio(r['nombre'], 'recorte')}.{EXT}"
+        if r["fichero"] and r["fichero"] != str(dst.relative_to(RECORTES)):
+            (RECORTES / r["fichero"]).unlink(missing_ok=True)
+        codec = ["-c:a", "libopus", "-b:a", "24k"] if EXT == "opus" else \
+                ["-c:a", "libmp3lame", "-b:a", "48k"]
+        tmp = dst.with_suffix(f".part.{EXT}")
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error",
+                        "-ss", f"{r['start_s']:.3f}",
+                        "-t", f"{max(0.05, r['stop_s'] - r['start_s']):.3f}",
+                        "-i", str(src), *codec, "-ac", "1", str(tmp)],
+                       capture_output=True, timeout=600, check=True)
+        tmp.replace(dst)
+        cx().execute("UPDATE recorte SET fichero=? WHERE id=?",
+                     (str(dst.relative_to(RECORTES)), rid))
+        cx().commit()
+    except Exception as e:  # noqa: BLE001
+        print(f"[recorte {rid}] {e}", flush=True)
+
+
+def borrar_ficheros_recorte(filas):
+    for r in filas:
+        if r["fichero"]:
+            f = RECORTES / r["fichero"]
+            f.unlink(missing_ok=True)
+            try:
+                f.parent.rmdir()
+            except OSError:
+                pass
 
 
 class H(BaseHTTPRequestHandler):
@@ -399,6 +463,8 @@ class H(BaseHTTPRequestHandler):
             cx().commit()
             fila = cx().execute("SELECT * FROM recorte WHERE id=?",
                                 (cur.lastrowid,)).fetchone()
+            threading.Thread(target=guardar_recorte, args=(cur.lastrowid,),
+                             daemon=True).start()
             return self._j([dict(fila)], 201)
         if t == "estado":
             cols = [c for c in COLS[t] if c in f]
@@ -437,6 +503,10 @@ class H(BaseHTTPRequestHandler):
         cx().execute(f"UPDATE {t} SET {','.join(c + '=?' for c in cols)}{w}",
                    [f[c] for c in cols] + v)
         cx().commit()
+        if t == "recorte":
+            for r in cx().execute(f"SELECT id FROM recorte{w}", v).fetchall():
+                threading.Thread(target=guardar_recorte, args=(r["id"],),
+                                 daemon=True).start()
         return self._j([], 200)
 
     def do_DELETE(self):
@@ -454,10 +524,15 @@ class H(BaseHTTPRequestHandler):
         t, q = u.path.split("/")[3], parse_qs(u.query)
         w, v = filtros(q)
         if t == "youtube":
-            for r in cx().execute(f"SELECT id, fichero FROM youtube{w}", v):
+            for r in cx().execute(f"SELECT id, fichero FROM youtube{w}", v).fetchall():
                 if r["fichero"]:
                     (YT_DIR / r["fichero"]).unlink(missing_ok=True)
+                borrar_ficheros_recorte(cx().execute(
+                    "SELECT fichero FROM recorte WHERE youtube_id=?", (r["id"],)).fetchall())
                 cx().execute("DELETE FROM recorte WHERE youtube_id=?", (r["id"],))
+        if t == "recorte":
+            borrar_ficheros_recorte(
+                cx().execute(f"SELECT fichero FROM recorte{w}", v).fetchall())
         cx().execute(f"DELETE FROM {t}{w}", v)
         cx().commit()
         return self._j([], 204)
