@@ -45,3 +45,58 @@ Salidas:
 100 textos → 1348 oraciones → 6674 clips (99,0 % de los posibles).
 
 Ver `NOTAS_oraciones.txt` para el método y sus límites.
+
+## 3. Anotador web — `web/` y `src/web/`
+
+Interfaz para revisar y corregir a mano las disfluencias, oración por oración.
+
+    ./run_web.sh          # http://127.0.0.1:8765
+
+Hablantes → 100 lecturas → oraciones. De cada oración muestra el número, el
+texto, la onda del clip de esa oración, los clips de 3 s que caen dentro con
+sus etiquetas, y la lista de disfluencias.
+
+Arrastrando sobre la onda se marca una disfluencia con el tipo activo. Toda
+marca dura **exactamente 3 s**, como los clips del otro dataset: el arrastre
+solo elige donde empieza la ventana, y el servidor la encaja igual (si la
+oracion dura menos de 3 s, la ventana es la oracion entera). Las marcas se
+pueden mover y solapar libremente; tambien se les cambia el tipo o se borran. Cada oración lleva
+un estado (pendiente / en progreso / completada / dudosa) y una nota, así que
+la revisión se puede dejar a medias y retomar.
+
+La primera vez que se abre una lectura, sus disfluencias se siembran con lo
+que ya se sabe por los clips de 3 s anotados; a partir de ahí se corrigen.
+
+Las anotaciones van a `anotaciones.db` (SQLite); los CSV originales no se
+tocan. `/api/export.csv` vuelca todo a CSV.
+
+| archivo | qué hace |
+|---|---|
+| `build_dataset.py` | cruza oraciones.csv, index.csv y los textos en `dataset.json` |
+| `app.py` | servidor (solo biblioteca estandar) y API de anotacion |
+| `static/` | la interfaz |
+
+### Anotador desplegado: `web/` + `deploy/`
+
+Para que varias personas anoten a la vez, `web/server.py` lo sirve todo en un
+proceso: la interfaz, la API, el SQLite y los audios comprimidos a Opus
+(2,4 GB → 227 MB). La web guarda **dónde** corta cada uno; el corte real se
+hace luego aquí con `src/web/exportar.py`, que saca los WAV de 3 s del audio
+original y un `index.csv` del mismo formato que el del dataset de clips.
+
+    .venv/bin/python src/web/build_web.py         # datos estáticos
+    .venv/bin/python src/web/preparar_audio.py    # audios en opus
+    python3 web/server.py                         # http://127.0.0.1:8765
+
+| archivo | qué hace |
+|---|---|
+| `web/server.py` | web, API, SQLite, audio y recortes |
+| `src/web/build_web.py` | formas de onda y lista de oraciones |
+| `src/web/preparar_audio.py` | comprime los 500 WAV a Opus |
+| `src/web/exportar.py` | recoge las anotaciones y corta los WAV de 3 s |
+| `deploy/` | Dockerfile, arranque y guía de despliegue |
+
+Guía de despliegue en `deploy/README.md`; el porqué de cada decisión, en
+`web/README.md`.
+
+`./run_web.sh` es la versión local anterior, que sirve los WAV del disco.

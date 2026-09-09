@@ -1,0 +1,17 @@
+# Para Dokploy o cualquier docker compose. El unico estado es el volumen
+# anotaciones: dentro esta el SQLite con todo lo que marque la gente.
+services:
+  anotador:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - anotaciones:/data
+    environment:
+      AUDIO_EXT: opus
+
+volumes:
+  anotaciones:

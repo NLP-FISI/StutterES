@@ -17,3 +17,14 @@ data/
 
 # intermedios
 outputs_oraciones/informes/anclaje_por_oracion.csv
+
+# anotador web
+anotaciones.db*
+src/web/dataset.json
+web/anotador.db*
+cache_fragmentos/
+respaldos/
+web/public/data/
+outputs_web/
+clips_web/
+web_audio/

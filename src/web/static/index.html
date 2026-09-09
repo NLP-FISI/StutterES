@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StutterES · Anotador</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header id="cab">
+  <div class="miga" id="miga"></div>
+  <div class="acciones">
+    <span id="guardado" class="guardado"></span>
+    <a class="btn" href="/api/export.csv">Exportar CSV</a>
+  </div>
+</header>
+<main id="vista"></main>
+<div id="ayuda" class="ayuda" hidden>
+  <b>Atajos</b>
+  <div><kbd>espacio</kbd> reproducir / pausar la oración enfocada</div>
+  <div><kbd>1</kbd>–<kbd>5</kbd> tipo de disfluencia activo</div>
+  <div><kbd>c</kbd> marcar completada · <kbd>p</kbd> pendiente · <kbd>d</kbd> dudosa</div>
+  <div><kbd>j</kbd> / <kbd>k</kbd> oración siguiente / anterior</div>
+  <div><kbd>supr</kbd> borrar la disfluencia seleccionada</div>
+  <div>arrastra sobre la onda para marcar una disfluencia</div>
+  <div>toda marca dura exactamente 3 s; se puede mover y solapar</div>
+</div>
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>

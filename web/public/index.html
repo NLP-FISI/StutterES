@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StutterES · Anotador</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header id="cab">
+  <div class="miga" id="miga"></div>
+  <div class="acciones">
+    <span id="guardado" class="guardado"></span>
+    <button class="btn" id="quien"></button>
+    <button class="btn" id="bayuda">?</button>
+  </div>
+</header>
+<main id="vista"><div class="vacio">cargando…</div></main>
+<div id="ayuda" class="ayuda" hidden>
+  <b>Cómo se anota</b>
+  <div><b>clic</b> en la onda → suena desde ahí (como una nota de voz)</div>
+  <div><b>arrastra</b> el fondo para mover el cursor</div>
+  <div><b>doble clic</b> → coloca una marca de <b>3 s</b> del tipo activo</div>
+  <div><b>clic</b> en una marca → la selecciona y la oye entera</div>
+  <div><b>arrastra</b> una marca para moverla · se pueden solapar</div>
+  <hr>
+  <div><kbd>espacio</kbd> reproducir la oración enfocada</div>
+  <div><kbd>1</kbd>–<kbd>5</kbd> tipo activo · <kbd>supr</kbd> borra la marca seleccionada</div>
+  <div><kbd>c</kbd> completada · <kbd>p</kbd> pendiente · <kbd>d</kbd> dudosa</div>
+  <div><kbd>j</kbd> / <kbd>k</kbd> oración siguiente / anterior</div>
+</div>
+<script src="/app.js"></script>
+</body>
+</html>
