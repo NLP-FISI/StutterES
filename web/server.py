@@ -399,7 +399,10 @@ class H(BaseHTTPRequestHandler):
             return self._j([dict(r) for r in cx().execute(
                 f"SELECT * FROM recorte{w} ORDER BY start_s", v)])
         if p.startswith("/rest/v1/"):
-            t = p.split("/")[3]
+            partes = p.split("/")
+            if len(partes) > 4:
+                return self._j({"error": "usa ?id=eq.N, no /id"}, 400)
+            t = partes[3]
             if t == "progreso":
                 w, v = filtros(q)
                 filas = cx().execute(

@@ -833,15 +833,17 @@ async function vistaYoutube (id) {
 
   let ABIERTO = null
   async function abre (r) {
-    const full = await api(`youtube/${r.id}`)
+    const [full] = await api(`youtube?id=eq.${r.id}`)
     ABIERTO = full
     RECORTES = await api(`recorte?youtube_id=eq.${r.id}`)
     detalle.innerHTML = ''
     const c = el('div', 'ora')
-    c.append(el('div', 'ofila')).firstChild.append(
-      el('div', 'num', seg1(full.dur_s)),
-      Object.assign(el('div', 'texto'), { textContent: full.nombre }))
-    if (full.titulo) c.querySelector('.texto').append(el('div', 'asr', full.titulo))
+    const cab = el('div', 'ofila')
+    const tx = el('div', 'texto')
+    tx.textContent = full.nombre
+    if (full.titulo) tx.append(el('div', 'asr', full.titulo))
+    cab.append(el('div', 'num', seg1(full.dur_s)), tx)
+    c.append(cab)
 
     ONDA_YT = new OndaYT(full, RECORTES, () => pintarRecortes(full))
     const onda = el('div', 'onda'); onda.append(ONDA_YT.cv); c.append(onda)
