@@ -231,12 +231,21 @@ def guardar_recorte(rid):
         src = YT_DIR / v["fichero"]
         carpeta = RECORTES / nombre_limpio(v["nombre"], f"audio_{r['youtube_id']}")
         carpeta.mkdir(parents=True, exist_ok=True)
-        dst = carpeta / f"{r['id']:04d}_{nombre_limpio(r['nombre'], 'recorte')}.{EXT}"
+        # si hay maestro WAV se corta de ahi y el recorte sale en WAV: estos
+        # ficheros son los que se le dan a XTTS como referencia de voz, y el
+        # opus de 24 kbps no sirve para eso
+        maestro = youtube.maestro(src)
+        if maestro is not None:
+            src, ext = maestro, "wav"
+            codec = ["-c:a", "pcm_s16le", "-ar", str(youtube.SR_MAESTRO)]
+        else:
+            ext = EXT
+            codec = ["-c:a", "libopus", "-b:a", "24k"] if EXT == "opus" else \
+                    ["-c:a", "libmp3lame", "-b:a", "48k"]
+        dst = carpeta / f"{r['id']:04d}_{nombre_limpio(r['nombre'], 'recorte')}.{ext}"
         if r["fichero"] and r["fichero"] != str(dst.relative_to(RECORTES)):
             (RECORTES / r["fichero"]).unlink(missing_ok=True)
-        codec = ["-c:a", "libopus", "-b:a", "24k"] if EXT == "opus" else \
-                ["-c:a", "libmp3lame", "-b:a", "48k"]
-        tmp = dst.with_suffix(f".part.{EXT}")
+        tmp = dst.with_suffix(f".part.{ext}")
         subprocess.run(["ffmpeg", "-y", "-loglevel", "error",
                         "-ss", f"{r['start_s']:.3f}",
                         "-t", f"{max(0.05, r['stop_s'] - r['start_s']):.3f}",
@@ -248,6 +257,63 @@ def guardar_recorte(rid):
         cx().commit()
     except Exception as e:  # noqa: BLE001
         print(f"[recorte {rid}] {e}", flush=True)
+
+
+def trocear(youtube_id, dur_s, solape_s=0.0, desde_s=0.0, hasta_s=None,
+            autor="", nombre_base="", resto=False):
+    """Parte un audio entero en trozos seguidos de dur_s segundos.
+
+    Crea las filas de una vez y deja un solo hilo escribiendo los ficheros en
+    orden: con cien trozos, un hilo por trozo tumbaria la maquina.
+    """
+    v = cx().execute("SELECT id, nombre, dur_s, fichero FROM youtube WHERE id=?",
+                     (int(youtube_id),)).fetchone()
+    if not v or not v["fichero"]:
+        return {"error": "ese audio no esta descargado"}
+    dur_s = float(dur_s)
+    if not 0.2 <= dur_s <= FRAG_MAX:
+        return {"error": f"la duracion tiene que estar entre 0,2 y {FRAG_MAX:g} s"}
+    solape_s = min(max(float(solape_s or 0.0), 0.0), dur_s - 0.1)
+    paso = dur_s - solape_s
+    a0 = max(0.0, float(desde_s or 0.0))
+    a1 = min(float(v["dur_s"]), float(hasta_s) if hasta_s else float(v["dur_s"]))
+    if a1 - a0 < 0.2:
+        return {"error": "el tramo elegido no da ni para un trozo"}
+    base = (nombre_base or "").strip()
+    # el trozo que sobra al final se tira si no llega a la mitad de lo pedido:
+    # un resto de dos segundos no vale como referencia de voz. Con resto=True
+    # se guarda igual.
+    minimo = 0.2 if resto else max(0.2, dur_s * 0.5)
+    filas, t, n = [], a0, 0
+    while t < a1 - 0.05:
+        b = min(a1, t + dur_s)
+        if b - t < minimo:
+            break
+        n += 1
+        filas.append((int(youtube_id), f"{base}_{n:03d}" if base else "",
+                      round(t, 3), round(b, 3), autor,
+                      time.strftime("%Y-%m-%dT%H:%M:%SZ")))
+        t += paso
+    if not filas:
+        return {"error": "no sale ningun trozo con esos valores"}
+    antes = cx().execute("SELECT COALESCE(MAX(id), 0) m FROM recorte").fetchone()["m"]
+    cx().executemany(
+        "INSERT INTO recorte (youtube_id,nombre,start_s,stop_s,autor,creado)"
+        " VALUES (?,?,?,?,?,?)", filas)
+    cx().commit()
+    ids = [r["id"] for r in cx().execute(
+        "SELECT id FROM recorte WHERE youtube_id=? AND id>? ORDER BY id",
+        (int(youtube_id), antes)).fetchall()]
+
+    def escribir():
+        for rid in ids:
+            try:
+                guardar_recorte(rid)
+            except Exception as e:  # noqa: BLE001
+                print(f"[trocear {rid}] {e}", flush=True)
+    threading.Thread(target=escribir, daemon=True).start()
+    return {"creados": len(filas), "dur_s": dur_s, "solape_s": solape_s,
+            "desde_s": round(a0, 3), "hasta_s": round(a1, 3)}
 
 
 def borrar_ficheros_recorte(filas):
@@ -456,6 +522,12 @@ class H(BaseHTTPRequestHandler):
             threading.Thread(target=bajar_video, args=(fid, url), daemon=True).start()
             fila = cx().execute("SELECT * FROM youtube WHERE id=?", (fid,)).fetchone()
             return self._j([dict(fila)], 201)
+        if t == "trocear":
+            r = trocear(f.get("youtube_id"), f.get("dur_s", 3.0),
+                        f.get("solape_s", 0.0), f.get("desde_s", 0.0),
+                        f.get("hasta_s"), f.get("autor", ""),
+                        f.get("nombre_base", ""), bool(f.get("resto")))
+            return self._j(r, 400 if "error" in r else 201)
         if t == "recorte":
             cur = cx().execute(
                 "INSERT INTO recorte (youtube_id,nombre,start_s,stop_s,autor,creado)"

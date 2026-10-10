@@ -14,6 +14,11 @@ from pathlib import Path
 BITRATE = "24k"
 SR_PICOS = 4000          # frecuencia a la que se lee para sacar la envolvente
 PICOS_MIN, PICOS_MAX = 400, 2000
+SR_MAESTRO = 24000       # el WAV que se usa para clonar voz
+
+# El opus de 24 kbps vale para escuchar y anotar, pero es una referencia mala
+# para clonar voz: XTTS reproduciria los artefactos del codec. Asi que de cada
+# descarga se guardan dos copias, el opus ligero y este WAV.
 
 URL_VALIDA = re.compile(
     r"^https?://(www\.|m\.|music\.)?(youtube\.com/(watch\?|shorts/|live/)|youtu\.be/)")
@@ -50,8 +55,14 @@ def info(url, raiz):
             "dur_s": float(d.get("duration") or 0)}
 
 
+def maestro(opus):
+    """El WAV de calidad que acompaña a un opus descargado, si existe."""
+    p = Path(opus).with_suffix(".wav")
+    return p if p.is_file() and p.stat().st_size > 44 else None
+
+
 def descargar(url, destino, raiz):
-    """Baja el mejor audio y lo deja en opus mono, como el resto del corpus."""
+    """Baja el mejor audio: opus mono para la web y WAV de 24 kHz para clonar."""
     destino = Path(destino)
     destino.parent.mkdir(parents=True, exist_ok=True)
     tmp = destino.parent / f".{destino.stem}.bruto"
@@ -70,6 +81,15 @@ def descargar(url, destino, raiz):
                  "-c:a", "libopus", "-b:a", BITRATE, "-ac", "1",
                  str(parcial)], 1800)
         parcial.replace(destino)
+        # el maestro para clonar: si falla, la descarga sigue siendo valida
+        try:
+            wav = destino.with_suffix(".part.wav")
+            _correr(["ffmpeg", "-y", "-loglevel", "error", "-i", str(bruto),
+                     "-ac", "1", "-ar", str(SR_MAESTRO), "-c:a", "pcm_s16le",
+                     str(wav)], 1800)
+            wav.replace(destino.with_suffix(".wav"))
+        except Exception as e:  # noqa: BLE001
+            print(f"[youtube] sin maestro wav para {destino.name}: {e}", flush=True)
     finally:
         bruto.unlink(missing_ok=True)
     return destino

@@ -98,7 +98,33 @@ original y un `index.csv` del mismo formato que el del dataset de clips.
 | `deploy/` | Dockerfile, arranque y guía de despliegue |
 
 La web trae además una vista de YouTube: se pega un enlace, se descarga el
-audio con nombre y se le sacan recortes libres, sin tipos ni disfluencias.
+audio con nombre y se le sacan recortes, libres o troceando el audio entero
+cada N segundos. De cada descarga se guardan dos copias: un opus de 24 kbps
+para escuchar y un WAV de 24 kHz, que es el que sirve de referencia de voz.
+
+## 4. Síntesis de habla disfluente — `src/sintesis/`
+
+Los trozos de la vista de YouTube se usan como referencia para clonar una voz
+con XTTS-v2 y hacerle leer un texto al que se le han escrito las disfluencias.
+
+    .venv-tts/bin/python src/sintesis/clonar.py --ref recortes/mivoz/ \
+        --texto "$(python src/sintesis/disfluencias.py 'Sismo de magnitud cuatro.' \
+                   --marcas 0:Prolongation,2:WordRep)" --acepto-cpml
+
+| archivo | qué hace |
+|---|---|
+| `disfluencias.py` | escribe la disfluencia en el texto (`de de magnitud`, `ma ma magnitud`) |
+| `clonar.py` | clona la voz con XTTS-v2 y sintetiza |
+
+Medido sobre el audio generado: las **repeticiones** sí salen (`magnitud
+magnitud` suena repetido), pero el **alargamiento y el bloqueo no**. XTTS no
+sostiene un sonido ni inserta una pausa por mucho que se le escriba; con
+`ssssismo` dice «esesicismo», y un `...` lo lee como la palabra «punto». Los
+números están en `src/sintesis/README.md`.
+
+Va en su propio entorno (`.venv-tts`) para no mover las versiones que usa el
+pipeline de anotación. XTTS-v2 es de licencia no comercial. El porqué de cada
+decisión y los límites del método, en `src/sintesis/README.md`.
 
 Guía de despliegue en `deploy/README.md`; el porqué de cada decisión, en
 `web/README.md`.

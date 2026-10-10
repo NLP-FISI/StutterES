@@ -857,6 +857,30 @@ async function vistaYoutube (id) {
     const dur = el('input', 't'); dur.id = 'dur'; dur.value = '3'
     ctrl.append(play, el('span', 'tiempo', '· doble clic corta'), dur,
       el('span', 'tiempo', 's · o arrastra para elegir el trozo'))
+
+    // trocear el audio entero de una vez
+    const sol = el('input', 't'); sol.value = '0'; sol.title = 'solape entre trozos'
+    const bt = el('button', 'btn', 'Trocear todo')
+    bt.onclick = async () => {
+      const d = parseFloat(dur.value) || 3
+      const s = parseFloat(sol.value) || 0
+      const n = Math.max(1, Math.floor((full.dur_s - 0) / Math.max(0.1, d - s)))
+      if (!confirm(`¿Trocear "${full.nombre}" entero cada ${d} s` +
+                   (s ? ` con ${s} s de solape` : '') + `?\nSaldrán unos ${n} recortes.`)) return
+      bt.disabled = true; bt.textContent = 'troceando…'
+      try {
+        const r = await api('trocear', {
+          method: 'POST',
+          body: { youtube_id: full.id, dur_s: d, solape_s: s, autor: AUTOR,
+                  nombre_base: full.nombre }
+        })
+        if (r && r.error) { alert(r.error); return }
+        RECORTES = await api(`recorte?youtube_id=eq.${full.id}`)
+        pintarRecortes(full); ONDA_YT.dibuja()
+      } finally { bt.disabled = false; bt.textContent = 'Trocear todo' }
+    }
+    ctrl.append(el('span', 'tiempo', '·'), bt, el('span', 'tiempo', 'solape'), sol,
+      el('span', 'tiempo', 's'))
     c.append(ctrl)
 
     const s2 = el('div', 'sec')
